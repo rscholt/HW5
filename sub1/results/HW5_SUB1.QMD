@@ -1,0 +1,329 @@
+---
+title: "Homework 4"
+subtitle: "Research Methods, Spring 2025"
+author: "Ryan Scholte"
+format:
+  pdf:
+    output-file: "Scholte-i-hw5-1"
+    output-ext: "pdf"
+    header-includes:
+      - \usepackage{float}
+      - \floatplacement{table}{H}
+jupyter: python3
+---
+You can access the [Repository](https://github.com/rscholt/HW5)
+
+# 1 
+
+```{python}
+
+#| echo: false  # Hides code but keeps output
+
+# Load the data
+import pandas as pd
+import numpy as np
+import statsmodels.api as sm
+import statsmodels.formula.api as smf
+import matplotlib.pyplot as plt
+from pyfixest.estimation import feols
+from pyfixest.utils import get_data
+import warnings 
+warnings.filterwarnings('ignore')
+
+
+#import txt data
+exp= pd.read_csv('/Users/ryanscholte/Desktop/GitHub/HW5/data/output/medicaid_expansion.txt', sep='\t')
+
+medicaid= pd.read_csv('/Users/ryanscholte/Desktop/GitHub/HW5/data/output/acs_medicaid.txt', sep='\t')
+
+insurance= pd.read_csv('/Users/ryanscholte/Desktop/GitHub/HW5/data/output/acs_insurance.txt', sep='\t')
+
+
+#Q1
+
+#Q1
+#Q1
+# groupby year and sum adult pop and ins_direct for each state 
+Nat_share = insurance.groupby('year')[['ins_direct', 'adult_pop']].sum()
+Nat_share['Nat_dir_share'] = Nat_share['ins_direct'] / Nat_share['adult_pop']
+
+# Plotting the national share of direct purchase insurance
+plt.figure(figsize=(10, 6))
+plt.plot(Nat_share.index, Nat_share['Nat_dir_share'], marker='o', label='National Share of Direct Purchase Insurance')
+plt.title('Share of Population with Direct Insurance Over Time')
+plt.legend()
+plt.xlabel('Year')
+plt.ylabel('Share of Population with Direct Insurance')
+plt.show()
+
+```
+
+
+# 2
+
+
+
+
+
+# 3 
+
+```{python}
+
+#| echo: false  # Hides code but keeps output
+# 
+#Q3
+# groupby year and sum adult pop and ins_direct for each state 
+Nat_share_MA = medicaid.groupby('year')[['ins_medicaid', 'adult_pop']].sum()
+Nat_share_MA['Nat_dir_share'] = Nat_share_MA['ins_medicaid'] / Nat_share_MA['adult_pop']
+
+# Plotting the national share of direct purchase insurance
+plt.figure(figsize=(10, 6))
+plt.plot(Nat_share_MA.index, Nat_share_MA['Nat_dir_share'], marker='o', label='National Share of Direct Purchase Insurance')
+plt.title('Share of Population with Medicaid Over Time')
+plt.legend()
+plt.xlabel('Year')
+plt.ylabel('Share of Population with Direct Insurance')
+plt.show()
+
+
+
+```
+
+
+# 4 
+
+```{python}
+
+#| echo: false  # Hides code but keeps output
+#Q4
+#Drop all states that expanded after 2014.
+# Ensure 'date_adopted' is in datetime format
+exp['date_adopted'] = pd.to_datetime(exp['date_adopted'])
+
+# Keep only rows where expansion was in 2014 or earlier
+exp_2014 = exp[exp['date_adopted'].dt.year <= 2014]
+states_exp_2014 = exp_2014['State'].unique().tolist()
+non_exp_states = exp[exp['expanded'] == False]
+non_exp_state_list = non_exp_states['State'].unique().tolist()
+#Plot the share of uninsured over time, separately by states that expanded Medicaid in 2014 versus those that did not. 
+
+
+insurance_expanded = insurance[insurance['State'].isin(states_exp_2014)]
+exp_share_uninsured = insurance_expanded.groupby('year')[['uninsured', 'adult_pop']].sum()
+exp_share_uninsured['uninsured_share'] = exp_share_uninsured['uninsured'] / exp_share_uninsured['adult_pop']
+
+insurance_nonexpanded = insurance[insurance['State'].isin(non_exp_state_list)]
+nonexp_share_uninsured = insurance_nonexpanded.groupby('year')[['uninsured', 'adult_pop']].sum()
+nonexp_share_uninsured['uninsured_share'] = nonexp_share_uninsured['uninsured'] / nonexp_share_uninsured['adult_pop']
+
+# plot both together on same figure
+plt.figure(figsize=(10, 6))
+plt.plot(exp_share_uninsured.index, exp_share_uninsured['uninsured_share'], marker='o', label='Expanded Medicaid in 2014')
+plt.plot(nonexp_share_uninsured.index, nonexp_share_uninsured['uninsured_share'], marker='o', label='Did Not Expand Medicaid')
+plt.title('Share of Uninsured Over Time')
+plt.legend()
+plt.xlabel('Year')
+plt.ylabel('Share of Uninsured')
+plt.show()
+
+
+```
+
+
+# 5 
+
+```{python}
+
+#| echo: false  # Hides code but keeps output
+#Q5
+
+exp_filtered = exp_share_uninsured.loc[[2012, 2015], 'uninsured_share']
+nonexp_filtered = nonexp_share_uninsured.loc[[2012, 2015], 'uninsured_share']
+
+# DD 2x2 table
+dd_table = pd.DataFrame({
+    'Expansion States': exp_filtered,
+    'Non-Expansion States': nonexp_filtered
+})
+
+dd_table.index.name = 'Year'
+print(dd_table)
+
+
+```
+
+
+# 6 
+
+```{python}
+
+#| echo: false  # Hides code but keeps output
+
+# Step 1: Add treatment flag and stack data
+exp2 = exp_share_uninsured[['uninsured', 'adult_pop']].copy()
+exp2['group'] = 1  # Treated group
+exp2['year'] = exp2.index
+
+nonexp = nonexp_share_uninsured[['uninsured', 'adult_pop']].copy()
+nonexp['group'] = 0  # Control group
+nonexp['year'] = nonexp.index
+
+# Step 2: Combine into one DataFrame
+reg_df = pd.concat([exp2, nonexp], ignore_index=True)
+
+# Step 3: Create DD variables
+reg_df['post'] = (reg_df['year'] > 2013).astype(int)
+reg_df['interaction'] = reg_df['group'] * reg_df['post']
+reg_df['uninsured_share'] = reg_df['uninsured'] / reg_df['adult_pop']
+
+# Step 4: Run DD regression
+model = smf.ols("uninsured_share ~ group + post + interaction", data=reg_df).fit()
+
+# Step 5: View results
+print(model.summary())
+```
+
+
+# 7 
+
+```{python}
+
+#| echo: false  # Hides code but keeps output
+#7
+
+insurance_merged = insurance.merge(
+    exp[['State', 'year', 'expanded']], 
+    on=['State', 'year'], how='left'
+)
+
+expand_years = exp[exp['expanded'] == True].groupby('State')['year'].min().reset_index()
+expand_years.columns = ['State', 'expand_year']
+
+insurance_merged = insurance_merged.merge(expand_years, on='State', how='left')
+
+df = insurance_merged[
+    (insurance_merged['expand_year'] == 2014) | (insurance_merged['expand_year'].isna())
+].copy()
+
+df['treated'] = (df['expand_year'] == 2014).astype(int)
+df['post'] = (df['year'] >= 2014).astype(int)
+df['interaction'] = df['treated'] * df['post']
+df['perc_unins'] = df['uninsured'] / df['adult_pop']
+
+model = feols(
+    fml='perc_unins ~ interaction | State + year',
+    data=df,
+    vcov={'CRV1': 'State'}
+)
+
+print(model.summary())
+
+```
+
+
+
+# 8 
+
+```{python}
+
+#| echo: false  # Hides code but keeps output
+
+#8
+
+insurance_merged = insurance.merge(
+    exp[['State', 'year', 'expanded']], 
+    on=['State', 'year'], how='left'
+)
+
+expand_years = exp[exp['expanded'] == True].groupby('State')['year'].min().reset_index()
+expand_years.columns = ['State', 'expand_year']
+
+insurance_merged = insurance_merged.merge(expand_years, on='State', how='left')
+
+# all** states — no filtering
+
+df_all = insurance_merged.copy()
+
+df_all['treated'] = (df_all['expand_year'] == 2014).astype(int)
+df_all['post'] = (df_all['year'] >= 2014).astype(int)
+df_all['interaction'] = df_all['treated'] * df_all['post']
+df_all['perc_unins'] = df_all['uninsured'] / df_all['adult_pop']
+
+model_all = feols(
+    fml='perc_unins ~ interaction | State + year',
+    data=df_all,
+    vcov={'CRV1': 'State'}
+)
+
+print(model_all.summary())
+
+```
+
+
+# 9
+```{python}
+
+#| echo: false  # Hides code but keeps output
+
+#9
+
+
+# Prep binary flags
+df_2010["is_hmo"] = df_2010["plan_type"].str.contains("HMO/HMOPOS", na=False).astype(int)
+df_2010["has_partd"] = (df_2010["partd"] == "Yes").astype(int)
+
+# Create threshold bands
+band_3 = df_2010[df_2010["raw_rating"].between(2.5, 3.0)].copy()
+band_3["group"] = np.where(band_3["raw_rating"] >= 2.75, "Above 3-Star", "Below 3-Star")
+band_3["group"] = pd.Categorical(band_3["group"], categories=["Below 3-Star", "Above 3-Star"], ordered=True)
+
+band_35 = df_2010[df_2010["raw_rating"].between(3.0, 3.5)].copy()
+band_35["group"] = np.where(band_35["raw_rating"] >= 3.25, "Above 3.5-Star", "Below 3.5-Star")
+
+# Plot HMO distribution near 3-star threshold
+plt.figure(figsize=(10, 4))
+sns.histplot(data=band_3, x="group", hue="is_hmo", multiple="dodge", shrink=0.8, palette="Set2")
+plt.title("HMO Distribution Around 3-Star Threshold (2.5 - 3.0)")
+plt.xlabel("Plan Group")
+plt.ylabel("Number of Plans")
+plt.legend(title="HMO", labels=["No", "Yes"])
+plt.tight_layout()
+plt.show()
+
+# Plot Part D distribution near 3-star threshold
+plt.figure(figsize=(10, 4))
+sns.histplot(data=band_3, x="group", hue="has_partd", multiple="dodge", shrink=0.8, palette="Set1")
+plt.title("Part D Distribution Around 3-Star Threshold (2.5 - 3.0)")
+plt.xlabel("Plan Group")
+plt.ylabel("Number of Plans")
+plt.legend(title="Part D", labels=["No", "Yes"])
+plt.tight_layout()
+plt.show()
+
+# Plot HMO distribution near 3.5-star threshold
+plt.figure(figsize=(10, 4))
+sns.histplot(data=band_35, x="group", hue="is_hmo", multiple="dodge", shrink=0.8, palette="Set2")
+plt.title("HMO Distribution Around 3.5-Star Threshold (3.0 - 3.5)")
+plt.xlabel("Plan Group")
+plt.ylabel("Number of Plans")
+plt.legend(title="HMO", labels=["No", "Yes"])
+plt.tight_layout()
+plt.show()
+
+# Plot Part D distribution near 3.5-star threshold
+plt.figure(figsize=(10, 4))
+sns.histplot(data=band_35, x="group", hue="has_partd", multiple="dodge", shrink=0.8, palette="Set1")
+plt.title("Part D Distribution Around 3.5-Star Threshold (3.0 - 3.5)")
+plt.xlabel("Plan Group")
+plt.ylabel("Number of Plans")
+plt.legend(title="Part D", labels=["No", "Yes"])
+plt.tight_layout()
+plt.show()
+
+```
+
+Shows that proportion of HMO above threshold is greater for both but more drastic at 3.0* level. Greater proportion of non part D above than below. However in general all areas have more HMO than non HMO and No Part D comapared to Part D in absolute counts. 
+
+# 10 
+
+There was some effect of rounding up star values showing manipultion. We know that star rating have increased and that enrollments have been increasing over time. Question 6 shows mostly strong positive coefficients indicating that there is an effect of star rating on market share. 
