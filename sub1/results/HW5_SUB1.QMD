@@ -189,6 +189,10 @@ print(model.summary())
 ```{python}
 
 #| echo: false  # Hides code but keeps output
+
+exp['date_adopted'] = pd.to_datetime(exp['date_adopted'])
+# add year column and adjust date_adopted to year
+exp['year'] = exp['date_adopted'].dt.year
 #7
 
 insurance_merged = insurance.merge(
@@ -266,7 +270,50 @@ print(model_all.summary())
 #| echo: false  # Hides code but keeps output
 
 #9
+# #9
+# filtered_states = insurance_merged[(insurance_merged['expand_year'] == 2014) | (insurance_merged['expand_year'].isna())].copy()
 
+# #  (year - adopted year from exp data)
+# filtered_states['event_time'] = filtered_states['year'] - filtered_states['expand_year'].fillna(0)
+
+
+# # create dummies for every year -3 (3 before) to +5 to 2019
+# event_time_dummies = pd.get_dummies(filtered_states['event_time'], prefix='event_time')
+# filtered_states = pd.concat([filtered_states, event_time_dummies], axis=1)
+
+# X = filtered_states[event_time_dummies.columns.tolist()]
+# X = sm.add_constant(X)  # Add constant for intercept
+# #create filtered states ['perc_unins']
+# filtered_states['perc_unins'] = filtered_states['uninsured'] / filtered_states['adult_pop']
+# y = filtered_states['perc_unins']
+
+# # state dummies
+# state_dummies = pd.get_dummies(filtered_states['State'], prefix='State')
+# year_dummies = pd.get_dummies(filtered_states['year'], prefix='year')
+# X = pd.concat([X, state_dummies, year_dummies], axis=1)
+
+# model = sm.OLS(y, X).fit()
+
+# coefficients = model.params[event_time_dummies.columns]
+# conf_int = model.conf_int().loc[event_time_dummies.columns]
+
+# plt.figure(figsize=(10, 6))
+# plt.errorbar(
+#     coefficients.index.str.replace('event_time_', '').astype(int),  # Event time
+#     coefficients.values,  # Coefficients
+#     yerr=[
+#         coefficients.values - conf_int[0].values,  # Lower bound
+#         conf_int[1].values - coefficients.values   # Upper bound
+#     ],
+#     fmt='o', capsize=5, label='Event Study Coefficients'
+# )
+# plt.axhline(0, color='black', linestyle='--', linewidth=1)
+# plt.title('Event Study: Effects of Medicaid Expansion')
+# plt.xlabel('Years Relative to Expansion')
+# plt.ylabel('Effect on Uninsured Percentage')
+# plt.legend()
+# plt.grid(True)
+# plt.show()
 
 
 ```
