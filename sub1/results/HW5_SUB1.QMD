@@ -268,62 +268,9 @@ print(model_all.summary())
 #9
 
 
-# Prep binary flags
-df_2010["is_hmo"] = df_2010["plan_type"].str.contains("HMO/HMOPOS", na=False).astype(int)
-df_2010["has_partd"] = (df_2010["partd"] == "Yes").astype(int)
-
-# Create threshold bands
-band_3 = df_2010[df_2010["raw_rating"].between(2.5, 3.0)].copy()
-band_3["group"] = np.where(band_3["raw_rating"] >= 2.75, "Above 3-Star", "Below 3-Star")
-band_3["group"] = pd.Categorical(band_3["group"], categories=["Below 3-Star", "Above 3-Star"], ordered=True)
-
-band_35 = df_2010[df_2010["raw_rating"].between(3.0, 3.5)].copy()
-band_35["group"] = np.where(band_35["raw_rating"] >= 3.25, "Above 3.5-Star", "Below 3.5-Star")
-
-# Plot HMO distribution near 3-star threshold
-plt.figure(figsize=(10, 4))
-sns.histplot(data=band_3, x="group", hue="is_hmo", multiple="dodge", shrink=0.8, palette="Set2")
-plt.title("HMO Distribution Around 3-Star Threshold (2.5 - 3.0)")
-plt.xlabel("Plan Group")
-plt.ylabel("Number of Plans")
-plt.legend(title="HMO", labels=["No", "Yes"])
-plt.tight_layout()
-plt.show()
-
-# Plot Part D distribution near 3-star threshold
-plt.figure(figsize=(10, 4))
-sns.histplot(data=band_3, x="group", hue="has_partd", multiple="dodge", shrink=0.8, palette="Set1")
-plt.title("Part D Distribution Around 3-Star Threshold (2.5 - 3.0)")
-plt.xlabel("Plan Group")
-plt.ylabel("Number of Plans")
-plt.legend(title="Part D", labels=["No", "Yes"])
-plt.tight_layout()
-plt.show()
-
-# Plot HMO distribution near 3.5-star threshold
-plt.figure(figsize=(10, 4))
-sns.histplot(data=band_35, x="group", hue="is_hmo", multiple="dodge", shrink=0.8, palette="Set2")
-plt.title("HMO Distribution Around 3.5-Star Threshold (3.0 - 3.5)")
-plt.xlabel("Plan Group")
-plt.ylabel("Number of Plans")
-plt.legend(title="HMO", labels=["No", "Yes"])
-plt.tight_layout()
-plt.show()
-
-# Plot Part D distribution near 3.5-star threshold
-plt.figure(figsize=(10, 4))
-sns.histplot(data=band_35, x="group", hue="has_partd", multiple="dodge", shrink=0.8, palette="Set1")
-plt.title("Part D Distribution Around 3.5-Star Threshold (3.0 - 3.5)")
-plt.xlabel("Plan Group")
-plt.ylabel("Number of Plans")
-plt.legend(title="Part D", labels=["No", "Yes"])
-plt.tight_layout()
-plt.show()
 
 ```
 
-Shows that proportion of HMO above threshold is greater for both but more drastic at 3.0* level. Greater proportion of non part D above than below. However in general all areas have more HMO than non HMO and No Part D comapared to Part D in absolute counts. 
 
 # 10 
 
-There was some effect of rounding up star values showing manipultion. We know that star rating have increased and that enrollments have been increasing over time. Question 6 shows mostly strong positive coefficients indicating that there is an effect of star rating on market share. 
