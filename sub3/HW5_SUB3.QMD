@@ -1,0 +1,301 @@
+---
+title: "Homework 4"
+subtitle: "Research Methods, Spring 2025"
+author: "Ryan Scholte"
+format:
+  pdf:
+    output-file: "Scholte-i-hw5-2"
+    output-ext: "pdf"
+    header-includes:
+      - \usepackage{float}
+      - \floatplacement{table}{H}
+jupyter: python3
+---
+You can access the [Repository](https://github.com/rscholt/HW5)
+
+# 1 
+
+```{python}
+
+#| echo: false  # Hides code but keeps output
+
+# Load the data
+import pandas as pd
+import numpy as np
+import statsmodels.api as sm
+import statsmodels.formula.api as smf
+import matplotlib.pyplot as plt
+import pyfixest as pf
+from IPython.display import Markdown, display
+import warnings
+warnings.simplefilter('ignore')
+
+
+
+
+
+#import txt data
+exp= pd.read_csv('/Users/ryanscholte/Desktop/GitHub/HW5/data/output/medicaid_expansion.txt', sep='\t')
+
+medicaid= pd.read_csv('/Users/ryanscholte/Desktop/GitHub/HW5/data/output/acs_medicaid.txt', sep='\t')
+
+insurance= pd.read_csv('/Users/ryanscholte/Desktop/GitHub/HW5/data/output/acs_insurance.txt', sep='\t')
+medicaid= medicaid[~medicaid['State'].isin(['District of Columbia', 'Puerto Rico'])]
+
+
+# Q1
+# Group by year and calculate the mean percentage of direct insurance
+medicaid['perc_direct'] = medicaid["ins_direct"] / medicaid["adult_pop"]
+Share = medicaid.groupby("year")["perc_direct"].mean().reset_index()
+
+# Plotting the national share of direct purchase insurance
+plt.figure(figsize=(10, 6))
+plt.plot(Share["year"], Share["perc_direct"], marker='o', label='Share of Direct Purchase Insurance')
+plt.axvline(x=2013.5, color="black", linestyle="--", label="Policy Change (2013.5)")
+plt.title('Share of Population with Direct Insurance Over Time')
+plt.legend()
+plt.xlabel('Year')
+plt.ylabel('Share of Population with Direct Insurance')
+plt.grid()
+plt.show()
+
+
+```
+
+
+# 2
+The decline in direct insurance purchase started in 2016 aorund when Trumps first term started. They attempted to undo many of the polocies and actions of the previous administration especially with the ACA exchanges. They were not able to completely get rid of it but did little things that removed the previous expected support it needed. For example the ACA exchanges came with a punishment for not having insurance but the punishment was changed to $0. Also advertising and resources to ensure people understand and can use an effective ACA exchange seemed to be reduced. Some research also mentioned the exapnsion of on ACA compliant short term limited duration insurance which I would expect to increase direct insurance as it is cheaper. But possibly the data measures something else or has a different effect from expected, or overshadowed by other factors.  
+
+
+
+
+# 3 
+
+```{python}
+
+#| echo: false  # Hides code but keeps output
+#Q3
+# Group by year and calculate the mean percentage of direct insurance
+medicaid['perc_MA'] = medicaid["ins_medicaid"] / medicaid["adult_pop"]
+Share_MA = medicaid.groupby("year")["perc_MA"].mean().reset_index()
+
+# Plotting the national share of direct purchase insurance
+plt.figure(figsize=(10, 6))
+plt.plot(Share_MA['year'], Share_MA['perc_MA'], marker='o', label='National Share of Direct Purchase Insurance')
+plt.axvline(x=2013.5, color="black", linestyle="--")
+plt.grid()
+plt.title('Share of Population with Medicaid Over Time')
+plt.legend()
+plt.xlabel('Year')
+plt.ylabel('Share of Population with Direct Insurance')
+plt.show()
+
+
+```
+
+
+# 4 
+
+```{python}
+
+#| echo: false  # Hides code but keeps output
+#Q4
+# fix time formatting
+medicaid['date_adopted'] = pd.to_datetime(medicaid['date_adopted'])
+
+# Filter for states that expanded Medicaid in 2014 or earlier or never expanded
+ins_plot_data = medicaid[medicaid["expand_year"].isna() | (medicaid["expand_year"] <= 2014)]
+
+# Calculate uninsured share 
+ins_plot_data["uninsured_share"] = ins_plot_data["uninsured"] / ins_plot_data["adult_pop"]
+
+# Group by expansion status and year and make df
+ins_plot_summary = (ins_plot_data.groupby(["expand_ever", "year"])["uninsured_share"].mean().reset_index())
+
+#plot
+plt.figure(figsize=(8, 5))
+for key, grp in ins_plot_summary.groupby("expand_ever"):
+    plt.plot(
+        grp["year"],
+        grp["uninsured_share"],
+        marker="o",
+        label="Expansion" if key else "Non-expansion",
+    )
+
+# Add a vertical line for 2013.5 to indicate the policy change
+plt.axvline(x=2013.5, color="black", linestyle="--")
+plt.title("Share of Uninsured over Time", fontsize=16)
+plt.xlabel("")
+plt.ylabel("Fraction Uninsured", fontsize=12)
+plt.grid(axis="y", color="gray", linestyle="--", alpha=0.5)
+plt.legend()
+plt.show()
+```
+
+
+# 5 
+
+```{python}
+
+#| echo: false  # Hides code but keeps output
+
+#Q5
+
+# Difference-in-Differences Table
+reg_data = medicaid.copy()
+reg_data = reg_data.loc[
+    (reg_data["expand_year"].isna()) | (reg_data["expand_year"] == 2014)
+]
+reg_data = reg_data.loc[
+    reg_data["year"].isin([2012, 2015])
+]
+
+reg_data['perc_unins'] = reg_data["uninsured"] / reg_data["adult_pop"]
+dd_table = (
+    reg_data.groupby(["expand_ever", "year"])["perc_unins"]
+    .mean()
+    .reset_index()
+    .pivot(index="expand_ever", columns="year", values="perc_unins")
+    .rename(columns={2012: "Pre", 2015: "Post"})
+    .reset_index()
+)
+dd_table["Group"] = dd_table["expand_ever"].map({False: "Non-expansion", True: "Expansion"})
+dd_table = dd_table[["Group", "Pre", "Post"]]
+
+# remove first column of dd_table
+display(dd_table.style.hide(axis='index'))
+
+
+
+
+```
+
+
+# 6 
+
+```{python}
+
+#| echo: false  # Hides code but keeps output
+# 6
+# Add treatment and post variables perc_unins
+reg_data = medicaid.copy()
+reg_data["post"] = (reg_data["year"] >= 2014).astype(int)
+reg_data["treat"] = reg_data["post"] * reg_data["expand_ever"].astype(int)
+reg_data = reg_data[(reg_data["expand_year"].isna()) | (reg_data["expand_year"] == 2014)]
+reg_data['perc_unins'] = medicaid["uninsured"] / medicaid["adult_pop"]
+
+# OLS regression without fixed effects
+results = []
+results.append(pf.feols("perc_unins ~ post + expand_ever + treat", data=reg_data))
+
+results_table = pf.etable(results, type='df',
+                          drop='Intercept', coef_fmt='b (se)')
+results_table = results_table.drop(index=['depvar', 'S.E. type'])
+results_table.columns = ['Standard DD']
+results_table.index = ['Post 2014', 'Expand', 'Post x Expand', 'Num. Obs.', 'R2']
+results_table = results_table.reset_index(names='')
+
+#remove index of results_table
+results_table.index = [''] * len(results_table)
+results_table
+
+
+```
+
+
+# 7 + 8
+
+```{python}
+
+#| echo: false  # Hides code but keeps output
+#7
+#regression with fixed effects
+results.append(
+    pf.feols("perc_unins ~ treat | State + year", data=reg_data))
+
+results_table = pf.etable(results, type='df',
+                          drop='Intercept', coef_fmt='b (se)')
+results_table = results_table.drop(index=['depvar', 'S.E. type', 'State', 'year'])
+results_table.columns = ['Standard DD', 'TWFE']
+results_table.index = ['Post 2014', 'Expand', 'Post x Expand', 'Num. Obs.', 'R2']
+results_table = results_table.reset_index(names='')
+
+#8
+
+# DD Regression (2014 expansion only)
+reg_data2 = medicaid.copy()
+reg_data2["treat"] = 0
+reg_data2.loc[(reg_data2["year"] >= reg_data2["expand_year"]) & (reg_data2["expand_year"].notna()), "treat"] = 1
+reg_data2['perc_unins'] = medicaid["uninsured"] / medicaid["adult_pop"]
+
+# regression with time varying treatment
+results.append(
+    pf.feols("perc_unins ~ treat | State + year", data=reg_data2)
+)
+
+results_table = pf.etable(results, type='df',
+                          drop='Intercept', coef_fmt='b (se)')
+results_table = results_table.drop(index=['depvar', 'S.E. type', 'State', 'year'])
+results_table = results_table.iloc[:, :3]
+results_table.columns = ['Standard DD', 'TWFE', 'Time-varying Treatment']
+results_table.index = ['Post 2014', 'Expand', 'Post x Expand', 'Num. Obs.', 'R2']
+results_table = results_table.reset_index(names='')
+
+# results_table
+
+display(results_table.style.hide(axis='index'))
+
+
+```
+The results are different and this makes sense and the second set 3rd column takes into accounf the variation in treatment timing as expansion was rolled out in different years between different states. This should be more accurate than assumeing all treated together where it can assume a state is treated when untreated or other way around. 
+
+
+
+# 9
+```{python}
+#| echo: false  # Hides code but keeps output
+#9
+# Event Study 
+reg_data["relative_year"] = (reg_data["year"] - reg_data["expand_year"]).fillna(np.inf)
+
+dynamic_twfe = pf.feols("perc_unins ~ i(relative_year, ref=-1) | State + year", data=reg_data, vcov={"CRV1": "State"})
+
+plt.figure(figsize=(8, 5))
+joint_ci = dynamic_twfe.coef() - dynamic_twfe.confint(joint=True).T.iloc[0, :]
+plt.errorbar(np.delete(np.arange(2012, 2020), 1), dynamic_twfe.coef(), yerr=joint_ci, fmt='o',  capsize=5)
+plt.axvline(x=2013, color="orange", linestyle="--")
+plt.axhline(y=0, color="black", linestyle="-")
+plt.title("Event Study with Common Treatment Time", fontsize=16)
+plt.ylabel("Coefficient", fontsize=12)
+plt.grid(axis='y', color='gray', linestyle='--', alpha=0.5)
+plt.show()
+
+
+```
+
+
+# 10 
+```{python}
+#| echo: false  # Hides code but keeps output
+#10 
+reg_data2= medicaid.copy()
+
+# ATE Q6: Event Study with time-varying treatment
+reg_data2["relative_year"] = (reg_data2["year"] - reg_data2["expand_year"]).fillna(np.inf)
+reg_data2["relative_year"] = reg_data2["relative_year"].clip(lower=-4)
+reg_data2['perc_unins'] = medicaid["uninsured"] / medicaid["adult_pop"]
+
+dynamic_twfe2 = pf.feols("perc_unins ~ i(relative_year, ref=-1) | State + year", data=reg_data2, vcov={"CRV1": "State"})
+
+plt.figure(figsize=(8, 5))
+joint_ci2 = dynamic_twfe2.coef() - dynamic_twfe2.confint(joint=True).T.iloc[0, :]
+plt.errorbar(np.delete(np.arange(-4, 6), 3), dynamic_twfe2.coef(), yerr=joint_ci2, fmt='o',  capsize=5)
+plt.axvline(x=-1, color="orange", linestyle="--")
+plt.axhline(y=0, color="black", linestyle="-")
+plt.title("Event Study with Staggered Treatment", fontsize=16)
+plt.ylabel("Coefficient", fontsize=12)
+plt.xlabel("Years Relative to Expansion", fontsize=12)
+plt.grid(axis='y', color='gray', linestyle='--', alpha=0.5)
+plt.show()
+
+```
